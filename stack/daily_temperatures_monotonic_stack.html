@@ -1,0 +1,166 @@
+
+<style>
+  .container { padding: 1rem 0; font-family: var(--font-sans); }
+  .title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .step-label { font-size: 13px; color: var(--color-text-secondary); }
+  .temps-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .cell { width: 56px; height: 56px; border-radius: var(--border-radius-md); border: 1.5px solid var(--color-border-secondary); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; transition: all 0.3s; background: var(--color-background-primary); position: relative; }
+  .cell .idx { font-size: 10px; color: var(--color-text-tertiary); margin-bottom: 2px; }
+  .cell .temp { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+  .cell.current { border-color: #185FA5; background: #E6F1FB; }
+  .cell.current .temp { color: #185FA5; }
+  .cell.popping { border-color: #3B6D11; background: #EAF3DE; }
+  .cell.popping .temp { color: #3B6D11; }
+  .cell.in-stack { border-color: #533AB7; background: #EEEDFE; }
+  .cell.in-stack .temp { color: #3C3489; }
+  .stack-area { margin-bottom: 1rem; }
+  .stack-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .stack-row { display: flex; gap: 8px; align-items: flex-end; min-height: 64px; border-bottom: 2px solid var(--color-border-secondary); padding-bottom: 8px; }
+  .stack-cell { width: 56px; height: 52px; border-radius: var(--border-radius-md); border: 1.5px solid #AFA9EC; background: #EEEDFE; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; transition: all 0.3s; }
+  .stack-cell .s-idx { font-size: 10px; color: #534AB7; }
+  .stack-cell .s-temp { font-size: 14px; font-weight: 500; color: #3C3489; }
+  .output-row { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+  .out-cell { width: 56px; height: 40px; border-radius: var(--border-radius-md); border: 1.5px solid var(--color-border-tertiary); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; background: var(--color-background-secondary); color: var(--color-text-secondary); transition: all 0.3s; }
+  .out-cell.filled { background: #EAF3DE; border-color: #3B6D11; color: #27500A; }
+  .explanation { font-size: 14px; color: var(--color-text-primary); background: var(--color-background-secondary); border-left: 3px solid #185FA5; padding: 10px 14px; border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0; margin-bottom: 1.5rem; min-height: 44px; line-height: 1.6; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .btn { padding: 7px 18px; font-size: 13px; cursor: pointer; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); transition: background 0.15s; }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .legend { display: flex; gap: 16px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+  .leg-dot { width: 12px; height: 12px; border-radius: 3px; }
+</style>
+<div class="container">
+  <h2 class="sr-only">每日温度单调栈求解过程演示</h2>
+  <div class="title-row">
+    <div>
+      <div style="font-size:15px; font-weight:500; color:var(--color-text-primary);">每日温度 — 单调栈演示</div>
+      <div class="step-label" id="step-label">步骤 0 / 0</div>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#185FA5;"></div>当前处理的元素</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#534AB7;"></div>在栈中</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#3B6D11;"></div>被弹出（找到答案）</div>
+  </div>
+  <div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:8px;">温度数组</div>
+  <div class="temps-row" id="temps-row"></div>
+  <div class="stack-area">
+    <div class="stack-label">栈（存下标）<span style="font-size:11px; margin-left:6px;">← 栈顶</span></div>
+    <div class="stack-row" id="stack-row"></div>
+  </div>
+  <div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:6px;">输出</div>
+  <div class="output-row" id="output-row"></div>
+  <div class="explanation" id="explanation">点击"下一步"开始演示</div>
+  <div class="controls">
+    <button class="btn" id="btn-prev" disabled>← 上一步</button>
+    <button class="btn" id="btn-next">下一步 →</button>
+    <button class="btn" id="btn-reset">重置</button>
+  </div>
+</div>
+<script>
+const temps = [73, 74, 75, 71, 69, 72, 76, 73];
+const n = temps.length;
+
+function buildSteps() {
+  const steps = [];
+  const stack = [];
+  const output = new Array(n).fill(0);
+
+  steps.push({
+    i: -1, popping: [], stack: [], output: output.slice(),
+    msg: `初始状态：温度数组 [${temps.join(', ')}]，栈为空，输出全为 0。<br>我们从左到右遍历每个元素。`
+  });
+
+  for (let i = 0; i < n; i++) {
+    steps.push({
+      i, popping: [], stack: stack.slice(), output: output.slice(),
+      msg: `i = ${i}，当前温度 <b>${temps[i]}</b>。检查栈：${stack.length === 0 ? '栈为空，直接入栈。' : `栈顶下标 ${stack[stack.length-1]}，对应温度 ${temps[stack[stack.length-1]]}。`}`
+    });
+
+    const popping = [];
+    while (stack.length > 0 && temps[stack[stack.length - 1]] < temps[i]) {
+      const last = stack.pop();
+      output[last] = i - last;
+      popping.push(last);
+      steps.push({
+        i, popping: popping.slice(), stack: stack.slice(), output: output.slice(),
+        msg: `温度 ${temps[i]} > 栈顶温度 ${temps[last]}（下标 ${last}）<br>→ 弹出下标 <b>${last}</b>，等待天数 = ${i} - ${last} = <b>${output[last]}</b>`
+      });
+    }
+    stack.push(i);
+    steps.push({
+      i, popping: [], stack: stack.slice(), output: output.slice(),
+      msg: stack.length === 1 && popping.length === 0
+        ? `栈为空，下标 ${i}（温度 ${temps[i]}）入栈。`
+        : popping.length > 0
+          ? `弹出完毕，下标 ${i}（温度 ${temps[i]}）入栈。`
+          : `温度 ${temps[i]} ≤ 栈顶温度，维持单调递减，下标 ${i} 直接入栈。`
+    });
+  }
+
+  steps.push({
+    i: -1, popping: [], stack: stack.slice(), output: output.slice(),
+    msg: `遍历结束。栈中剩余 [${stack.join(', ')}] 对应的温度之后没有更高温度，答案为 0（初始值）。<br>最终输出：[${output.join(', ')}]`
+  });
+
+  return steps;
+}
+
+const steps = buildSteps();
+let cur = 0;
+
+function render() {
+  const s = steps[cur];
+  document.getElementById('step-label').textContent = `步骤 ${cur} / ${steps.length - 1}`;
+
+  const tempsRow = document.getElementById('temps-row');
+  tempsRow.innerHTML = '';
+  for (let j = 0; j < n; j++) {
+    const d = document.createElement('div');
+    d.className = 'cell';
+    if (j === s.i) d.classList.add('current');
+    else if (s.popping.includes(j)) d.classList.add('popping');
+    else if (s.stack.includes(j)) d.classList.add('in-stack');
+    d.innerHTML = `<span class="idx">[${j}]</span><span class="temp">${temps[j]}</span>`;
+    tempsRow.appendChild(d);
+  }
+
+  const stackRow = document.getElementById('stack-row');
+  stackRow.innerHTML = '';
+  if (s.stack.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'font-size:12px; color:var(--color-text-tertiary); align-self:center;';
+    empty.textContent = '（空）';
+    stackRow.appendChild(empty);
+  } else {
+    [...s.stack].reverse().forEach(idx => {
+      const d = document.createElement('div');
+      d.className = 'stack-cell';
+      d.innerHTML = `<span class="s-idx">[${idx}]</span><span class="s-temp">${temps[idx]}</span>`;
+      stackRow.appendChild(d);
+    });
+  }
+
+  const outputRow = document.getElementById('output-row');
+  outputRow.innerHTML = '';
+  for (let j = 0; j < n; j++) {
+    const d = document.createElement('div');
+    d.className = 'out-cell';
+    if (s.output[j] !== 0) d.classList.add('filled');
+    d.textContent = s.output[j];
+    outputRow.appendChild(d);
+  }
+
+  document.getElementById('explanation').innerHTML = s.msg;
+  document.getElementById('btn-prev').disabled = cur === 0;
+  document.getElementById('btn-next').disabled = cur === steps.length - 1;
+}
+
+document.getElementById('btn-next').onclick = () => { if (cur < steps.length - 1) { cur++; render(); } };
+document.getElementById('btn-prev').onclick = () => { if (cur > 0) { cur--; render(); } };
+document.getElementById('btn-reset').onclick = () => { cur = 0; render(); };
+
+render();
+</script>

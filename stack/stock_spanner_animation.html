@@ -1,0 +1,190 @@
+
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --border-radius-md: 6px;
+    --border-radius-lg: 10px;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-background-tertiary: #e8e8e8;
+    --color-background-info: #E6F1FB;
+    --color-background-success: #EAF3DE;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666666;
+    --color-text-tertiary: #999999;
+    --color-text-info: #185FA5;
+    --color-text-success: #3B6D11;
+    --color-border-secondary: #d0d0d0;
+    --color-border-tertiary: #e0e0e0;
+    --color-border-info: #185FA5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  #root { padding: 1rem 0; font-family: var(--font-sans); }
+  h2.sr-only { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0); }
+  .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .btn { padding: 6px 14px; font-size: 13px; cursor: pointer; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); transition: background .15s; }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn-primary { background: var(--color-background-info); color: var(--color-text-info); border-color: transparent; }
+  .price-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  .price-tag { padding: 4px 10px; border-radius: var(--border-radius-md); font-size: 13px; border: 0.5px solid var(--color-border-tertiary); background: var(--color-background-secondary); color: var(--color-text-secondary); transition: all .3s; }
+  .price-tag.active { border-color: var(--color-border-info); color: var(--color-text-info); background: var(--color-background-info); font-weight: 500; }
+  .price-tag.done { opacity: .5; }
+  .vis-area { display: flex; gap: 2rem; align-items: flex-end; min-height: 260px; }
+  .stack-col { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 160px; }
+  .stack-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; }
+  .stack-box { width: 148px; padding: 10px 12px; border-radius: 6px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); font-size: 13px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; transition: all .35s; position: relative; }
+  .stack-box.new { border-color: var(--color-border-info); background: var(--color-background-info); }
+  .stack-box.popping { opacity: 0; transform: translateX(12px); }
+  .stack-box .lbl { color: var(--color-text-secondary); font-size: 11px; }
+  .stack-box .val { font-weight: 500; }
+  .stack-empty { color: var(--color-text-secondary); font-size: 12px; height: 40px; display: flex; align-items: center; opacity: .5; }
+  .info-col { flex: 1; min-width: 200px; }
+  .step-card { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; min-height: 140px; }
+  .step-card h3 { font-size: 14px; font-weight: 500; margin: 0 0 10px; color: var(--color-text-primary); }
+  .step-card p { font-size: 13px; color: var(--color-text-secondary); margin: 0 0 8px; line-height: 1.6; }
+  .step-card .result { font-size: 18px; font-weight: 500; color: var(--color-text-info); margin-top: 12px; }
+  .log { margin-top: 1rem; }
+  .log-entry { font-size: 12px; color: var(--color-text-secondary); padding: 3px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; gap: 8px; }
+  .log-entry .price-badge { background: var(--color-background-info); color: var(--color-text-info); border-radius: 4px; padding: 1px 6px; font-weight: 500; }
+  .log-entry .span-badge { background: var(--color-background-success); color: var(--color-text-success); border-radius: 4px; padding: 1px 6px; font-weight: 500; }
+  .bar-chart { display: flex; gap: 6px; align-items: flex-end; height: 100px; margin-top: 1rem; }
+  .bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .bar { width: 28px; border-radius: 4px 4px 0 0; background: var(--color-background-tertiary); transition: all .35s; border: 0.5px solid var(--color-border-tertiary); }
+  .bar.active { background: var(--color-background-info); border-color: transparent; }
+  .bar.span-covered { background: var(--color-background-success); border-color: transparent; }
+  .bar-val { font-size: 11px; color: var(--color-text-secondary); }
+  .bar-span { font-size: 10px; color: var(--color-text-tertiary); }
+</style>
+<div id="root">
+  <h2 class="sr-only">Stock Spanner 单调栈动画演示：逐步展示每个价格的 span 计算过程</h2>
+  <div class="controls">
+    <button class="btn btn-primary" id="btn-step" onclick="step()">下一步 →</button>
+    <button class="btn" id="btn-reset" onclick="reset()">重置</button>
+    <span style="font-size:12px;color:var(--color-text-secondary)">示例价格序列：</span>
+    <div class="price-row" id="price-row"></div>
+  </div>
+  <div class="vis-area">
+    <div class="stack-col">
+      <div class="stack-label">单调栈（栈顶在上）</div>
+      <div id="stack-vis" style="display:flex;flex-direction:column-reverse;width:148px;min-height:180px;justify-content:flex-end;"></div>
+    </div>
+    <div class="info-col">
+      <div class="step-card" id="step-card">
+        <h3>点击「下一步」开始</h3>
+        <p>我们将逐个处理价格，计算每个价格的 span。</p>
+        <p style="font-size:12px;opacity:.7"><b>Span</b> = 当前价格之前（含今天）有多少天的价格 ≤ 今天的价格，且连续。</p>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+  <div style="margin-top:1rem;">
+    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;">价格柱状图（绿色 = 当前 span 覆盖范围）</div>
+    <div class="bar-chart" id="bar-chart"></div>
+  </div>
+</div>
+<script>
+const PRICES = [100, 80, 60, 70, 60, 75, 85];
+let stack = [];
+let cursor = -1;
+let results = [];
+let popping = false;
+
+function reset() {
+  stack = [];
+  cursor = -1;
+  results = [];
+  popping = false;
+  render();
+  document.getElementById('step-card').innerHTML = `<h3>点击「下一步」开始</h3><p>我们将逐个处理价格，计算每个价格的 span。</p><p style="font-size:12px;opacity:.7"><b>Span</b> = 当前价格之前（含今天）有多少天的价格 ≤ 今天的价格，且连续。</p>`;
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('btn-step').disabled = false;
+}
+
+function step() {
+  if (cursor + 1 >= PRICES.length) return;
+  cursor++;
+  const price = PRICES[cursor];
+  let span = 1;
+  const popped = [];
+  while (stack.length > 0 && stack[stack.length-1][0] <= price) {
+    const top = stack.pop();
+    span += top[1];
+    popped.push(top);
+  }
+  stack.push([price, span]);
+  results[cursor] = span;
+
+  let popMsg = '';
+  if (popped.length > 0) {
+    popMsg = `<p>弹出了 <b>${popped.length}</b> 个元素（价格 ≤ ${price}）：${popped.map(p=>`<span style="font-weight:500">(${p[0]},${p[1]})</span>`).join('、')}，累积 span += ${popped.map(p=>p[1]).join(' + ')}。</p>`;
+  } else {
+    popMsg = `<p>栈顶价格 > ${price}（或栈为空），无需弹出。</p>`;
+  }
+
+  document.getElementById('step-card').innerHTML = `
+    <h3>处理价格 ${price}（第 ${cursor+1} 天）</h3>
+    <p>初始 span = 1（今天自身）。</p>
+    ${popMsg}
+    <p>将 (${price}, ${span}) 压入栈。</p>
+    <div class="result">span = ${span}</div>
+  `;
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span>第${cursor+1}天</span><span class="price-badge">价格 ${price}</span><span>→</span><span class="span-badge">span = ${span}</span>`;
+  document.getElementById('log').prepend(entry);
+
+  if (cursor + 1 >= PRICES.length) {
+    document.getElementById('btn-step').disabled = true;
+  }
+  render();
+}
+
+function render() {
+  const priceRow = document.getElementById('price-row');
+  priceRow.innerHTML = '';
+  PRICES.forEach((p, i) => {
+    const t = document.createElement('span');
+    t.className = 'price-tag' + (i === cursor ? ' active' : i < cursor ? ' done' : '');
+    t.textContent = p;
+    priceRow.appendChild(t);
+  });
+
+  const sv = document.getElementById('stack-vis');
+  sv.innerHTML = '';
+  if (stack.length === 0) {
+    sv.innerHTML = '<div class="stack-empty">（栈为空）</div>';
+  } else {
+    stack.forEach((item, i) => {
+      const box = document.createElement('div');
+      box.className = 'stack-box' + (i === stack.length-1 ? ' new' : '');
+      box.innerHTML = `<span><span class="lbl">价格</span> <span class="val">${item[0]}</span></span><span><span class="lbl">span</span> <span class="val">${item[1]}</span></span>`;
+      sv.appendChild(box);
+    });
+  }
+
+  const bc = document.getElementById('bar-chart');
+  bc.innerHTML = '';
+  const maxH = 80;
+  const maxP = Math.max(...PRICES);
+  let spanStart = cursor >= 0 ? cursor - results[cursor] + 1 : -1;
+
+  PRICES.forEach((p, i) => {
+    const h = Math.round((p / maxP) * maxH);
+    const isActive = i === cursor;
+    const isCovered = cursor >= 0 && i >= spanStart && i <= cursor;
+    const wrap = document.createElement('div');
+    wrap.className = 'bar-wrap';
+    wrap.innerHTML = `
+      <div class="bar-val">${i < cursor || i === cursor ? p : ''}</div>
+      <div class="bar ${isActive ? 'active' : isCovered && !isActive ? 'span-covered' : ''}" style="height:${i <= cursor ? h : 4}px"></div>
+      <div class="bar-span">${results[i] !== undefined ? results[i] : ''}</div>
+    `;
+    bc.appendChild(wrap);
+  });
+}
+
+reset();
+</script>
