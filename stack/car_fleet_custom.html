@@ -1,0 +1,288 @@
+
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --border-radius-md: 6px;
+    --border-radius-lg: 10px;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-background-tertiary: #e8e8e8;
+    --color-background-info: #E6F1FB;
+    --color-background-success: #EAF3DE;
+    --color-background-warning: #FAEEDA;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666666;
+    --color-text-tertiary: #999999;
+    --color-text-info: #185FA5;
+    --color-text-success: #3B6D11;
+    --color-text-warning: #854F0B;
+    --color-border-secondary: #d0d0d0;
+    --color-border-tertiary: #e0e0e0;
+    --color-border-info: #185FA5;
+    --color-border-success: #3B6D11;
+  }
+* { box-sizing: border-box; }
+.container { padding: 1rem 0; font-family: var(--font-sans); }
+.phase-label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 4px; font-weight: 500; }
+.step-info { font-size: 12px; color: var(--color-text-secondary); min-height: 18px; }
+.stack-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.stack-item { background: var(--color-background-info); color: var(--color-text-info); font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 0.5px solid var(--color-border-info); }
+.result-badge { font-size: 14px; font-weight: 500; color: var(--color-text-success); background: var(--color-background-success); border: 0.5px solid var(--color-border-success); padding: 4px 12px; border-radius: 6px; display: inline-block; }
+.btn-row { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.table-wrap { overflow-x: auto; margin-top: 10px; }
+table { font-size: 11px; border-collapse: collapse; width: 100%; }
+th { font-weight: 500; color: var(--color-text-secondary); padding: 4px 6px; border-bottom: 0.5px solid var(--color-border-tertiary); text-align: center; }
+td { padding: 3px 6px; text-align: center; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); }
+tr.active-row td { background: var(--color-background-info); color: var(--color-text-info); }
+tr.done-row td { color: var(--color-text-secondary); }
+tr.dominated-row td { color: var(--color-text-warning); background: var(--color-background-warning); }
+</style>
+
+<div class="container">
+  <h2 class="sr-only">Car fleet animation — target=20, 11 cars</h2>
+
+  <canvas id="c" width="640" height="200" style="width:100%;border-radius:8px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:block;"></canvas>
+
+  <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;">
+      <div class="phase-label" id="phase-label">点击 Next 开始</div>
+      <div class="step-info" id="step-info"></div>
+    </div>
+    <div id="result-area" style="min-height:28px;"></div>
+  </div>
+
+  <div style="margin-top:8px;">
+    <div class="phase-label">Stack（到达时间，单调递增）：</div>
+    <div class="stack-row" id="stack-display"><span style="font-size:12px;color:var(--color-text-secondary)">(empty)</span></div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>#</th><th>pos</th><th>speed</th><th>time = (20-pos)/spd</th><th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="btn-row">
+    <button onclick="reset()" style="font-size:13px;">↺ Reset</button>
+    <button onclick="prevStep()" id="btn-prev" style="font-size:13px;">← Prev</button>
+    <button onclick="nextStep()" id="btn-next" style="font-size:13px;">Next →</button>
+    <button onclick="autoPlay()" id="btn-auto" style="font-size:13px;">▶ Auto</button>
+    <label style="font-size:12px;color:var(--color-text-secondary);">Speed
+      <input type="range" id="speed" min="300" max="1500" value="900" step="200" style="width:70px;vertical-align:middle;">
+    </label>
+  </div>
+</div>
+
+<script>
+const TARGET = 20;
+const POS =   [15,4,10,12,17,19,11,14,6,0,2];
+const SPD =   [4, 8, 1, 2, 8, 8, 10,7, 10,8,6];
+
+// Build sorted cars
+const cars = POS.map((p,i) => ({ origIdx:i, pos:p, spd:SPD[i], time:(TARGET-p)/SPD[i] }));
+cars.sort((a,b) => b.pos - a.pos);
+
+// Assign stable colors
+const PALETTE = ['#534AB7','#0F6E56','#993C1D','#993556','#185FA5','#3B6D11','#854F0B','#533489','#0F566E','#99451D','#186FA5'];
+const PAL_LT =  ['#EEEDFE','#E1F5EE','#FAECE7','#FBEAF0','#E6F1FB','#EAF3DE','#FAEEDA','#F0EDFE','#E1F2F5','#FAF0E7','#E6F3FB'];
+cars.forEach((c,i) => { c.color = PALETTE[i]; c.colorLt = PAL_LT[i]; c.label = `C${i}`; });
+
+// Build steps
+let steps = [];
+steps.push({ type:'init', stack:[], current:-1, label:'初始状态（已按距离终点从近到远排序）', info:'从离终点最近的车开始处理' });
+
+const stack = [];
+for (let i = 0; i < cars.length; i++) {
+  const car = cars[i];
+  const dominated = stack.length > 0 && car.time <= stack[stack.length-1];
+  steps.push({
+    type: dominated ? 'dominated' : 'push',
+    stack: JSON.parse(JSON.stringify(stack)),
+    current: i,
+    label: `处理 pos=${car.pos}, speed=${car.spd} → time = ${car.time.toFixed(2)}s`,
+    info: dominated
+      ? `${car.time.toFixed(2)} ≤ 栈顶 ${stack[stack.length-1].toFixed(2)} → 会被追上，合并到前面车队，不入栈`
+      : `${car.time.toFixed(2)} > ${stack.length ? '栈顶 '+stack[stack.length-1].toFixed(2) : '栈空'} → 独立车队，入栈`,
+    newTime: car.time,
+    dominated,
+  });
+  if (!dominated) stack.push(car.time);
+}
+steps.push({ type:'done', stack: JSON.parse(JSON.stringify(stack)), current:-1, label:`完成！共 ${stack.length} 个车队`, info:'栈的大小 = 最终车队数量' });
+
+let stepIdx = -1;
+let autoTimer = null;
+
+// Build table rows
+const tbody = document.getElementById('tbody');
+cars.forEach((c,i) => {
+  const tr = document.createElement('tr');
+  tr.id = `row-${i}`;
+  tr.innerHTML = `<td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color};margin-right:4px;vertical-align:middle;"></span>${c.label}</td><td>${c.pos}</td><td>${c.spd}</td><td>${c.time.toFixed(2)}s</td><td id="status-${i}">—</td>`;
+  tbody.appendChild(tr);
+});
+
+function renderStep() {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const step = stepIdx >= 0 ? steps[stepIdx] : steps[0];
+  const { stack: stackAtStep, current, type } = step;
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const roadY = 110, roadH = 30;
+  const margin = 44, roadW = W - margin*2;
+  const toX = p => margin + (p / TARGET) * roadW;
+
+  // Road
+  ctx.fillStyle = isDark ? '#2a2a28' : '#e8e6de';
+  ctx.beginPath(); ctx.roundRect(margin, roadY-roadH/2, roadW, roadH, 5); ctx.fill();
+  ctx.setLineDash([8,8]); ctx.strokeStyle = isDark ? '#555' : '#c0beb5'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(margin, roadY); ctx.lineTo(margin+roadW, roadY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Target flag
+  const tX = toX(TARGET);
+  ctx.strokeStyle = isDark ? '#a0a0a0' : '#666'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(tX, roadY-roadH/2-20); ctx.lineTo(tX, roadY+roadH/2); ctx.stroke();
+  ctx.fillStyle = '#E24B4A';
+  ctx.beginPath(); ctx.moveTo(tX, roadY-roadH/2-20); ctx.lineTo(tX+16, roadY-roadH/2-14); ctx.lineTo(tX, roadY-roadH/2-8); ctx.fill();
+  ctx.fillStyle = isDark ? '#c2c0b6' : '#555';
+  ctx.font = '10px var(--font-sans)'; ctx.textAlign = 'center';
+  ctx.fillText('20', tX, roadY-roadH/2-24);
+
+  // Determine state of each car at current step
+  // cars processed before current = done (push or dominated)
+  // current = highlight
+  // after current = dimmed
+  const processedCount = stepIdx >= 0 ? steps[stepIdx].current : -1;
+
+  // Collect which cars are dominated up to now
+  const dominatedSet = new Set();
+  for (let s = 1; s <= stepIdx && s < steps.length; s++) {
+    if (steps[s].dominated && steps[s].current >= 0) dominatedSet.add(steps[s].current);
+  }
+
+  cars.forEach((car, i) => {
+    const x = toX(car.pos);
+    const isCurrent = (type !== 'init' && type !== 'done') && i === current;
+    const isProcessed = processedCount > 0 && i < current;
+    const isDominated = dominatedSet.has(i);
+
+    const carW = 22, carH = 12;
+    ctx.save();
+    ctx.globalAlpha = (isProcessed || isCurrent || type === 'done') ? 1.0 : 0.38;
+
+    if (isCurrent) { ctx.shadowColor = car.color; ctx.shadowBlur = 10; }
+
+    ctx.fillStyle = car.colorLt;
+    ctx.strokeStyle = car.color;
+    ctx.lineWidth = isCurrent ? 2 : 0.8;
+    ctx.beginPath(); ctx.roundRect(x - carW/2, roadY - carH - 1, carW, carH, 3); ctx.fill(); ctx.stroke();
+
+    // Wheels
+    ctx.fillStyle = isDark ? '#888' : '#555'; ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.arc(x-5, roadY-1, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+5, roadY-1, 3, 0, Math.PI*2); ctx.fill();
+
+    // Label
+    ctx.fillStyle = car.color;
+    ctx.font = `${isCurrent?'600 ':''}9px var(--font-sans)`;
+    ctx.textAlign = 'center';
+    ctx.fillText(car.label, x, roadY - carH/2 + 3);
+
+    // Time below road for processed
+    if (isProcessed || isCurrent || type === 'done') {
+      ctx.fillStyle = isDominated ? (isDark ? '#BA7517' : '#854F0B') : (isCurrent ? car.color : (isDark ? '#888' : '#999'));
+      ctx.font = '9px var(--font-sans)';
+      ctx.fillText(car.time.toFixed(1)+'s', x, roadY + roadH/2 + 12);
+    }
+
+    ctx.restore();
+  });
+
+  // Axis ticks
+  ctx.fillStyle = isDark ? '#888' : '#aaa';
+  ctx.font = '9px var(--font-sans)'; ctx.textAlign = 'center';
+  for (let v = 0; v <= TARGET; v += 4) {
+    const x = toX(v);
+    ctx.fillRect(x, roadY+roadH/2, 0.5, 4);
+    ctx.fillText(v, x, roadY+roadH/2+10);
+  }
+
+  // Labels panel
+  document.getElementById('phase-label').textContent = step.label;
+  document.getElementById('step-info').textContent = step.info;
+
+  // Stack display
+  const stackDiv = document.getElementById('stack-display');
+  let showStack = [...stackAtStep];
+  if (step.type === 'push') showStack = [...stackAtStep, step.newTime];
+  if (!showStack.length) {
+    stackDiv.innerHTML = '<span style="font-size:12px;color:var(--color-text-secondary)">(empty)</span>';
+  } else {
+    stackDiv.innerHTML = showStack.map(t => `<span class="stack-item">${t.toFixed(2)}s</span>`).join('<span style="font-size:11px;color:var(--color-text-secondary);padding:0 2px;">→</span>');
+  }
+
+  // Table row highlights
+  cars.forEach((c, i) => {
+    const tr = document.getElementById(`row-${i}`);
+    const statusCell = document.getElementById(`status-${i}`);
+    tr.className = '';
+    if (type !== 'init' && type !== 'done' && i === current) {
+      tr.className = 'active-row';
+      statusCell.textContent = step.dominated ? '⚠ 合并' : '✓ 入栈';
+    } else if (i < current && stepIdx > 0) {
+      // find what happened to this car
+      let wasDominated = false;
+      for (let s = 1; s < steps.length; s++) {
+        if (steps[s].current === i) { wasDominated = steps[s].dominated; break; }
+      }
+      tr.className = wasDominated ? 'dominated-row' : 'done-row';
+      statusCell.textContent = wasDominated ? '合并' : '车队头';
+    } else if (type === 'done') {
+      let wasDominated = false;
+      for (let s = 1; s < steps.length; s++) {
+        if (steps[s].current === i) { wasDominated = steps[s].dominated; break; }
+      }
+      tr.className = wasDominated ? 'dominated-row' : 'done-row';
+      statusCell.textContent = wasDominated ? '合并' : '车队头';
+    } else {
+      statusCell.textContent = '—';
+    }
+  });
+
+  // Result
+  const resultDiv = document.getElementById('result-area');
+  if (step.type === 'done') {
+    resultDiv.innerHTML = `<span class="result-badge">🏁 ${step.stack.length} 个车队</span>`;
+  } else { resultDiv.innerHTML = ''; }
+
+  document.getElementById('btn-prev').disabled = stepIdx <= -1;
+  document.getElementById('btn-next').disabled = stepIdx >= steps.length - 1;
+}
+
+function reset() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btn-auto').textContent = '▶ Auto'; }
+  stepIdx = -1; renderStep();
+}
+function nextStep() { if (stepIdx < steps.length-1) { stepIdx++; renderStep(); } }
+function prevStep() { if (stepIdx > -1) { stepIdx--; renderStep(); } }
+function autoPlay() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btn-auto').textContent = '▶ Auto'; return; }
+  document.getElementById('btn-auto').textContent = '⏸ Pause';
+  autoTimer = setInterval(() => {
+    if (stepIdx >= steps.length-1) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btn-auto').textContent = '▶ Auto'; }
+    else { stepIdx++; renderStep(); }
+  }, 1800 - +document.getElementById('speed').value);
+}
+
+renderStep();
+</script>
