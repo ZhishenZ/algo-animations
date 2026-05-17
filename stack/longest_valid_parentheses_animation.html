@@ -1,0 +1,246 @@
+
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --border-radius-md: 6px;
+    --border-radius-lg: 10px;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-background-tertiary: #e8e8e8;
+    --color-background-info: #E6F1FB;
+    --color-background-success: #EAF3DE;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666666;
+    --color-text-tertiary: #999999;
+    --color-text-info: #185FA5;
+    --color-text-success: #3B6D11;
+    --color-border-secondary: #d0d0d0;
+    --color-border-tertiary: #e0e0e0;
+    --color-border-info: #185FA5;
+  }
+  body { font-family: var(--font-sans); }
+* { box-sizing: border-box; }
+.char-box {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 8px;
+  font-size: 20px; font-weight: 500; font-family: monospace;
+  border: 1.5px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  transition: all 0.3s;
+  position: relative;
+}
+.char-box.current { border-color: #185FA5; background: #E6F1FB; color: #0C447C; }
+.char-box.highlight { background: #EAF3DE; border-color: #3B6D11; color: #173404; }
+.char-box.invalid { background: var(--color-background-secondary); color: var(--color-text-tertiary); }
+.char-box.best { background: #E1F5EE; border-color: #0F6E56; }
+.idx-label { font-size: 10px; color: var(--color-text-tertiary); position: absolute; bottom: -18px; }
+.stack-item {
+  width: 40px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--color-border-secondary); border-radius: 6px;
+  font-size: 13px; font-weight: 500; font-family: monospace;
+  background: var(--color-background-secondary); color: var(--color-text-primary);
+  margin-bottom: 4px; transition: all 0.3s;
+}
+.stack-item.top { border-color: #185FA5; background: #E6F1FB; color: #0C447C; }
+.stack-item.anchor { border-color: #BA7517; background: #FAEEDA; color: #633806; }
+.stack-new { animation: popIn 0.25s ease; }
+.stack-pop { animation: popOut 0.2s ease forwards; }
+@keyframes popIn { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes popOut { to { transform: scale(0.6); opacity: 0; } }
+.btn { cursor: pointer; border: 1px solid var(--color-border-secondary); border-radius: 8px; padding: 7px 18px; font-size: 13px; background: var(--color-background-primary); color: var(--color-text-primary); transition: background 0.15s; }
+.btn:hover { background: var(--color-background-secondary); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-primary { border-color: #185FA5; color: #0C447C; background: #E6F1FB; }
+.log-box { font-size: 12.5px; line-height: 1.7; color: var(--color-text-secondary); min-height: 40px; }
+.ans-val { font-size: 28px; font-weight: 500; color: var(--color-text-primary); }
+.speed-label { font-size: 12px; color: var(--color-text-tertiary); }
+</style>
+
+<div style="padding: 1.2rem 0 0.5rem;">
+
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom: 1.2rem; flex-wrap:wrap;">
+    <span style="font-size:13px; color:var(--color-text-secondary);">测试字符串：</span>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <button class="btn" onclick="setInput('(()')">( ( )</button>
+      <button class="btn" onclick="setInput(')()())')">)()())</button>
+      <button class="btn btn-primary" onclick="setInput('()(()')">()(()</button>
+      <button class="btn" onclick="setInput('(()(()(')">(()(()(</button>
+      <button class="btn" onclick="setInput(')()())()()(')">)()())()()(</button>
+    </div>
+    <input id="custom-input" type="text" placeholder="自定义…" style="font-family:monospace; font-size:14px; padding:6px 10px; border-radius:8px; border:1px solid var(--color-border-secondary); background:var(--color-background-primary); color:var(--color-text-primary); width:120px;" oninput="setInput(this.value)">
+  </div>
+
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom: 1.8rem; flex-wrap:wrap;">
+    <button class="btn btn-primary" id="btn-prev" onclick="step(-1)">← 上一步</button>
+    <button class="btn btn-primary" id="btn-next" onclick="step(1)">下一步 →</button>
+    <button class="btn" id="btn-auto" onclick="toggleAuto()">▶ 自动播放</button>
+    <button class="btn" onclick="reset()">↺ 重置</button>
+    <label style="display:flex; align-items:center; gap:6px; margin-left:8px;">
+      <span class="speed-label">速度</span>
+      <input type="range" min="200" max="1200" step="100" value="700" id="speed-range" style="width:80px;" oninput="autoDelay=+this.value">
+    </label>
+  </div>
+
+  <div style="display:flex; gap:40px; align-items:flex-start; flex-wrap:wrap; margin-bottom: 1.6rem;">
+    <!-- String display -->
+    <div>
+      <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:8px; letter-spacing:.05em;">输入字符串</div>
+      <div id="char-row" style="display:flex; gap:6px; margin-bottom:24px;"></div>
+    </div>
+
+    <!-- Stack -->
+    <div>
+      <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:8px; letter-spacing:.05em;">栈（底 → 顶）</div>
+      <div style="display:flex; flex-direction:column-reverse; align-items:center; min-height:120px; justify-content:flex-end; border-left:2px solid var(--color-border-tertiary); padding-left:10px;">
+        <div id="stack-view"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div>
+      <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:8px; letter-spacing:.05em;">当前步骤</div>
+      <div style="font-size:13px; color:var(--color-text-secondary); line-height:2;">
+        当前索引 i：<b id="stat-i" style="color:var(--color-text-primary);">-</b><br>
+        栈顶：<b id="stat-top" style="color:var(--color-text-primary);">-</b><br>
+        ans：<span class="ans-val" id="stat-ans">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div style="border-left: 3px solid var(--color-border-secondary); padding-left: 12px; margin-bottom: 1.4rem;">
+    <div class="log-box" id="log-text">点击「下一步」开始演示</div>
+  </div>
+
+  <!-- Best window highlight (shown at end) -->
+  <div id="best-section" style="display:none;">
+    <div style="font-size:12px; color:var(--color-text-tertiary); margin-bottom:4px;">最长有效括号（绿色高亮）</div>
+    <div id="best-row" style="display:flex; gap:6px;"></div>
+    <div style="margin-top:8px; font-size:13px; color:var(--color-text-secondary);">长度 = <b id="best-len" style="color:var(--color-text-primary); font-size:18px;">0</b></div>
+  </div>
+
+</div>
+
+<script>
+let s = '()(()';
+let states = [];
+let pos = -1;
+let autoTimer = null;
+let autoDelay = 700;
+
+function buildStates(str) {
+  let st = [-1];
+  let ans = 0;
+  let steps = [];
+  // Initial state
+  steps.push({ i: -1, st: [-1], ans: 0, action: 'init', msg: `初始化栈，压入哨兵 -1（作为"断点基准"）`, bestStart: -1, bestLen: 0 });
+
+  let bestStart = -1, bestLen = 0;
+
+  for (let i = 0; i < str.length; i++) {
+    let ch = str[i];
+    if (ch === '(') {
+      st.push(i);
+      steps.push({ i, st: [...st], ans, action: 'push', msg: `i=${i}，遇到 '('，将索引 ${i} 压栈`, bestStart, bestLen });
+    } else {
+      let popped = st.pop();
+      if (st.length === 0) {
+        st.push(i);
+        steps.push({ i, st: [...st], ans, action: 'newanchor', msg: `i=${i}，遇到 ')'，弹出后栈空 → 以 ${i} 作为新断点压栈，无法与任何 '(' 配对`, bestStart, bestLen });
+      } else {
+        let len = i - st[st.length - 1];
+        if (len > ans) { ans = len; bestStart = st[st.length-1]+1; bestLen = len; }
+        steps.push({ i, st: [...st], ans, action: 'match', msg: `i=${i}，遇到 ')'，弹出 ${popped}，配对成功 ✓\n长度 = ${i} − ${st[st.length-1]} = ${len}，ans 更新为 ${ans}`, bestStart, bestLen });
+      }
+    }
+  }
+  steps.push({ i: str.length, st: [...st], ans, action: 'done', msg: `遍历结束，最终 ans = ${ans}`, bestStart, bestLen });
+  return steps;
+}
+
+function setInput(str) {
+  s = str.replace(/\s/g, '');
+  if (document.getElementById('custom-input').value !== str) {
+    document.getElementById('custom-input').value = str.includes(' ') ? str : '';
+  }
+  reset();
+}
+
+function reset() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btn-auto').textContent = '▶ 自动播放'; }
+  states = buildStates(s);
+  pos = 0;
+  document.getElementById('best-section').style.display = 'none';
+  render();
+}
+
+function step(dir) {
+  pos = Math.max(0, Math.min(states.length - 1, pos + dir));
+  render();
+}
+
+function render() {
+  let st = states[pos];
+  // Char row
+  let row = document.getElementById('char-row');
+  row.innerHTML = '';
+  for (let j = 0; j < s.length; j++) {
+    let div = document.createElement('div');
+    div.className = 'char-box';
+    if (j === st.i) div.className += ' current';
+    div.innerHTML = `${s[j]}<span class="idx-label">${j}</span>`;
+    row.appendChild(div);
+  }
+  // Stack
+  let sv = document.getElementById('stack-view');
+  sv.innerHTML = '';
+  for (let k = 0; k < st.st.length; k++) {
+    let d = document.createElement('div');
+    d.className = 'stack-item' + (k === st.st.length - 1 ? ' top' : (k === 0 ? ' anchor' : ''));
+    d.textContent = st.st[k];
+    sv.appendChild(d);
+  }
+  // Stats
+  document.getElementById('stat-i').textContent = st.i >= 0 && st.i < s.length ? st.i : (st.action === 'done' ? '完成' : '-');
+  document.getElementById('stat-top').textContent = st.st.length ? st.st[st.st.length - 1] : '(空)';
+  document.getElementById('stat-ans').textContent = st.ans;
+  // Log
+  document.getElementById('log-text').textContent = st.msg;
+  // Nav buttons
+  document.getElementById('btn-prev').disabled = pos <= 0;
+  document.getElementById('btn-next').disabled = pos >= states.length - 1;
+
+  if (st.action === 'done' && st.bestLen > 0) {
+    document.getElementById('best-section').style.display = '';
+    let br = document.getElementById('best-row');
+    br.innerHTML = '';
+    for (let j = 0; j < s.length; j++) {
+      let d = document.createElement('div');
+      d.className = 'char-box' + (j >= st.bestStart && j < st.bestStart + st.bestLen ? ' best' : ' invalid');
+      d.innerHTML = `${s[j]}<span class="idx-label">${j}</span>`;
+      br.appendChild(d);
+    }
+    document.getElementById('best-len').textContent = st.bestLen;
+  }
+}
+
+function toggleAuto() {
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    document.getElementById('btn-auto').textContent = '▶ 自动播放';
+  } else {
+    document.getElementById('btn-auto').textContent = '⏸ 暂停';
+    autoTimer = setInterval(() => {
+      if (pos >= states.length - 1) {
+        clearInterval(autoTimer); autoTimer = null;
+        document.getElementById('btn-auto').textContent = '▶ 自动播放';
+        return;
+      }
+      step(1);
+    }, autoDelay);
+  }
+}
+
+reset();
+</script>
