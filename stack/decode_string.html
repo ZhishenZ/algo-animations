@@ -1,0 +1,211 @@
+
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --border-radius-md: 6px;
+    --border-radius-lg: 10px;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666666;
+    --color-text-tertiary: #999999;
+    --color-border-primary: #b0b0b0;
+    --color-border-secondary: #d0d0d0;
+    --color-border-tertiary: #e0e0e0;
+  }
+*{box-sizing:border-box}
+.wrap{padding:1rem 0;font-family:var(--font-sans);color:var(--color-text-primary)}
+.input-row{display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap}
+.input-row input{flex:1;min-width:160px;font-family:var(--font-mono);font-size:14px}
+.char-strip{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1.25rem}
+.cb{width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
+  background:var(--color-background-secondary);transition:all 0.15s}
+.cb.active{border:1.5px solid #378ADD;background:#E6F1FB;color:#0C447C}
+.cb.done{opacity:0.3}
+.log{font-size:13px;color:var(--color-text-secondary);min-height:20px;
+  padding:8px 12px;background:var(--color-background-secondary);
+  border-radius:0;border-left:3px solid #378ADD;font-family:var(--font-mono);
+  margin-bottom:1.25rem;word-break:break-all}
+.cur-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem}
+.cur-box{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);
+  border-radius:var(--border-radius-lg);padding:12px}
+.cur-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+.cur-val{font-family:var(--font-mono);font-size:14px;font-weight:500;min-height:20px;word-break:break-all}
+.cur-val.num{color:#633806}.cur-val.str{color:#085041}
+.stacks-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem}
+.stack-panel{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);
+  border-radius:var(--border-radius-lg);padding:12px}
+.stack-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:8px}
+.stack-body{display:flex;flex-direction:column;gap:4px;min-height:40px}
+.s-item{padding:3px 8px;border-radius:4px;font-family:var(--font-mono);font-size:13px;
+  border:0.5px solid var(--color-border-tertiary);animation:popIn 0.15s ease}
+.s-item.num{background:#FAEEDA;color:#633806;border-color:#FAC775}
+.s-item.str{background:#E1F5EE;color:#085041;border-color:#5DCAA5}
+.s-item.top-marker{display:flex;align-items:center;gap:6px}
+.top-badge{font-size:10px;background:#378ADD;color:#fff;padding:1px 5px;border-radius:3px;font-family:var(--font-sans)}
+.bot-line{border-top:2px solid var(--color-border-primary);margin-top:4px;padding-top:4px;
+  font-size:11px;color:var(--color-text-tertiary);text-align:center;letter-spacing:0.03em}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.step-info{font-size:13px;color:var(--color-text-secondary);margin-left:auto}
+.result-box{margin-top:1rem;padding:10px 14px;background:#E1F5EE;border-radius:var(--border-radius-md);
+  border:0.5px solid #5DCAA5;font-family:var(--font-mono);font-size:15px;font-weight:500;
+  color:#085041;display:none}
+@keyframes popIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+
+<div class="wrap">
+<h2 class="sr-only">Decode String algorithm step-by-step visualizer</h2>
+
+<div class="input-row">
+  <input type="text" id="sinput" value="2[ab3[c]d]e" />
+  <button onclick="buildSteps()">Load ↗</button>
+</div>
+
+<div class="char-strip" id="charStrip"></div>
+<div class="log" id="log">press Step or Play to start</div>
+
+<div class="cur-row">
+  <div class="cur-box">
+    <div class="cur-label">cur num</div>
+    <div class="cur-val num" id="curNum">0</div>
+  </div>
+  <div class="cur-box">
+    <div class="cur-label">cur str</div>
+    <div class="cur-val str" id="curStr">""</div>
+  </div>
+</div>
+
+<div class="stacks-row">
+  <div class="stack-panel">
+    <div class="stack-label">stNum</div>
+    <div class="stack-body" id="stNum"></div>
+  </div>
+  <div class="stack-panel">
+    <div class="stack-label">stStr</div>
+    <div class="stack-body" id="stStr"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btnPrev" onclick="go(-1)">← prev</button>
+  <button id="btnNext" onclick="go(1)">next →</button>
+  <button id="btnPlay" onclick="togglePlay()"><i class="ti ti-player-play" aria-hidden="true"></i> play</button>
+  <button onclick="reset()">↺ reset</button>
+  <span class="step-info" id="stepInfo">step 0 / 0</span>
+</div>
+
+<div class="result-box" id="resultBox"></div>
+</div>
+
+<script>
+let steps=[],cur=-1,playing=false,timer=null;
+
+function buildSteps(){
+  const s=document.getElementById('sinput').value.trim();
+  steps=[];
+  let str='',num=0,stNum=[],stStr=[];
+
+  function snap(ci,log){
+    steps.push({ci,log,str,num,stNum:[...stNum],stStr:[...stStr],done:false});
+  }
+
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(c==='['){
+      stNum.push(num);stStr.push(str);
+      snap(i,`'[' → push num=${num} to stNum, push "${str}" to stStr; reset both`);
+      num=0;str='';
+    } else if(c===']'){
+      const ln=stNum.pop(),ls=stStr.pop();
+      snap(i,`']' → pop stNum → ${ln}, pop stStr → "${ls}"`);
+      const expanded=str.repeat(ln);
+      str=ls+expanded;
+      snap(i,`  → str = "${ls}" + "${str.slice(ls.length)}" = "${str}"`);
+    } else if(c>='0'&&c<='9'){
+      num=num*10+parseInt(c);
+      snap(i,`digit '${c}' → num = ${num}`);
+    } else {
+      str+=c;
+      snap(i,`char '${c}' → str = "${str}"`);
+    }
+  }
+  steps.push({ci:s.length,log:`✓ done → "${str}"`,str,num,stNum:[],stStr:[],done:true});
+
+  cur=-1;
+  buildStrip(s);
+  render();
+  document.getElementById('resultBox').style.display='none';
+}
+
+function buildStrip(s){
+  const el=document.getElementById('charStrip');
+  el.innerHTML='';
+  for(let i=0;i<s.length;i++){
+    const d=document.createElement('div');
+    d.className='cb';d.id='cb'+i;d.textContent=s[i];
+    el.appendChild(d);
+  }
+}
+
+function renderStack(elId,items,cls){
+  const el=document.getElementById(elId);
+  if(!items.length){el.innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary);padding:4px 0">(empty)</div>';return;}
+  let html='';
+  for(let i=items.length-1;i>=0;i--){
+    const val=cls==='num'?items[i]:`"${items[i]}"`;
+    const isTop=i===items.length-1;
+    html+=`<div class="s-item ${cls}${isTop?' top-marker':''}">`;
+    if(isTop) html+=`<span class="top-badge">top</span>`;
+    html+=`<span>${val}</span></div>`;
+  }
+  html+=`<div class="bot-line">bottom</div>`;
+  el.innerHTML=html;
+}
+
+function render(){
+  const s=document.getElementById('sinput').value.trim();
+  document.getElementById('stepInfo').textContent=`step ${Math.max(cur+1,0)} / ${steps.length}`;
+  if(cur<0){
+    document.getElementById('curNum').textContent='0';
+    document.getElementById('curStr').textContent='""';
+    document.getElementById('stNum').innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary);padding:4px 0">(empty)</div>';
+    document.getElementById('stStr').innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary);padding:4px 0">(empty)</div>';
+    document.getElementById('log').textContent='press Step or Play to start';
+    for(let i=0;i<s.length;i++){const e=document.getElementById('cb'+i);if(e)e.className='cb';}
+    return;
+  }
+  const st=steps[cur];
+  document.getElementById('curNum').textContent=st.num;
+  document.getElementById('curStr').textContent=`"${st.str}"`;
+  document.getElementById('log').textContent=st.log;
+  renderStack('stNum',st.stNum,'num');
+  renderStack('stStr',st.stStr,'str');
+  for(let i=0;i<s.length;i++){
+    const e=document.getElementById('cb'+i);if(!e)continue;
+    e.className=i<st.ci?'cb done':i===st.ci?'cb active':'cb';
+  }
+  if(st.done){
+    const rb=document.getElementById('resultBox');
+    rb.textContent=`result: "${st.str}"`;
+    rb.style.display='block';
+  }
+}
+
+function go(d){cur=Math.max(-1,Math.min(steps.length-1,cur+d));render();}
+function reset(){stopPlay();cur=-1;render();}
+function togglePlay(){
+  if(playing){stopPlay();return;}
+  playing=true;
+  document.getElementById('btnPlay').innerHTML='<i class="ti ti-player-pause" aria-hidden="true"></i> pause';
+  timer=setInterval(()=>{if(cur>=steps.length-1){stopPlay();return;}go(1);},650);
+}
+function stopPlay(){
+  playing=false;clearInterval(timer);
+  document.getElementById('btnPlay').innerHTML='<i class="ti ti-player-play" aria-hidden="true"></i> play';
+}
+
+buildSteps();
+</script>
