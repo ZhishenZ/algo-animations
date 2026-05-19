@@ -1,0 +1,237 @@
+
+<style>
+  :root {
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --border-radius-md: 6px;
+    --border-radius-lg: 10px;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f5;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666666;
+    --color-text-tertiary: #999999;
+    --color-border-primary: #b0b0b0;
+    --color-border-secondary: #d0d0d0;
+    --color-border-tertiary: #e0e0e0;
+  }
+*{box-sizing:border-box}
+.wrap{padding:1rem 0;font-family:var(--font-sans);color:var(--color-text-primary)}
+.input-section{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 16px;margin-bottom:1.25rem}
+.input-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.input-row:last-child{margin-bottom:0}
+.input-row label{font-size:12px;color:var(--color-text-secondary);width:54px;flex-shrink:0}
+.input-row input{flex:1;min-width:120px;font-family:var(--font-mono);font-size:13px}
+.arr-strip{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:1rem}
+.arr-label{font-size:12px;color:var(--color-text-secondary);width:54px;flex-shrink:0}
+.cell{width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
+  background:var(--color-background-secondary);transition:all 0.15s;position:relative}
+.cell.active-push{border:1.5px solid #378ADD;background:#E6F1FB;color:#0C447C}
+.cell.active-pop{border:1.5px solid #1D9E75;background:#E1F5EE;color:#085041}
+.cell.done{opacity:0.28}
+.ptr{font-size:9px;position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);
+  white-space:nowrap;color:var(--color-text-tertiary)}
+
+.mid-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem}
+.stack-panel{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);
+  border-radius:var(--border-radius-lg);padding:12px}
+.panel-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:8px}
+.stack-body{display:flex;flex-direction:column;gap:4px;min-height:40px}
+.s-item{padding:3px 10px;border-radius:4px;font-family:var(--font-mono);font-size:13px;
+  background:#E6F1FB;color:#0C447C;border:0.5px solid #85B7EB;
+  display:flex;align-items:center;gap:6px;animation:popIn 0.15s ease}
+.top-badge{font-size:10px;background:#378ADD;color:#fff;padding:1px 5px;border-radius:3px;font-family:var(--font-sans)}
+.bot-line{border-top:2px solid var(--color-border-primary);margin-top:4px;padding-top:4px;
+  font-size:11px;color:var(--color-text-tertiary);text-align:center}
+.ptrs-box{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);
+  border-radius:var(--border-radius-lg);padding:12px}
+.ptr-row{display:flex;gap:16px;flex-wrap:wrap}
+.ptr-item{font-size:13px;font-family:var(--font-mono)}
+.ptr-item span{color:var(--color-text-secondary);font-family:var(--font-sans);font-size:12px;margin-right:4px}
+
+.log{font-size:13px;color:var(--color-text-secondary);min-height:20px;
+  padding:8px 12px;border-left:3px solid #378ADD;font-family:var(--font-mono);
+  margin-bottom:1.25rem;background:var(--color-background-secondary);word-break:break-all;border-radius:0}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.step-info{font-size:13px;color:var(--color-text-secondary);margin-left:auto}
+.verdict{margin-top:1rem;padding:10px 14px;border-radius:var(--border-radius-md);
+  font-family:var(--font-mono);font-size:15px;font-weight:500;display:none}
+.verdict.true{background:#E1F5EE;border:0.5px solid #5DCAA5;color:#085041}
+.verdict.false{background:#FCEBEB;border:0.5px solid #F09595;color:#791F1F}
+@keyframes popIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+
+<div class="wrap">
+<h2 class="sr-only">Validate Stack Sequences step-by-step visualizer</h2>
+
+<div class="input-section">
+  <div class="input-row">
+    <label>pushed</label>
+    <input type="text" id="ipushed" value="1,2,3,4,5" placeholder="e.g. 1,2,3,4,5"/>
+  </div>
+  <div class="input-row">
+    <label>popped</label>
+    <input type="text" id="ipopped" value="4,5,3,2,1" placeholder="e.g. 4,5,3,2,1"/>
+    <button onclick="buildSteps()">Load ↗</button>
+  </div>
+</div>
+
+<div style="padding-bottom:20px;margin-bottom:1.25rem">
+  <div class="arr-strip" id="stripPushed"></div>
+  <div class="arr-strip" id="stripPopped"></div>
+</div>
+
+<div class="log" id="log">press Step or Play to start</div>
+
+<div class="mid-row">
+  <div class="stack-panel">
+    <div class="panel-label">stack st1</div>
+    <div class="stack-body" id="stackBody"></div>
+  </div>
+  <div class="ptrs-box">
+    <div class="panel-label">pointers</div>
+    <div class="ptr-row">
+      <div class="ptr-item"><span>p1 (pushed)</span><span id="vp1">0</span></div>
+      <div class="ptr-item"><span>p2 (popped)</span><span id="vp2">0</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button onclick="go(-1)">← prev</button>
+  <button onclick="go(1)">next →</button>
+  <button id="btnPlay" onclick="togglePlay()"><i class="ti ti-player-play" aria-hidden="true"></i> play</button>
+  <button onclick="reset()">↺ reset</button>
+  <span class="step-info" id="stepInfo">step 0 / 0</span>
+</div>
+
+<div class="verdict" id="verdict"></div>
+</div>
+
+<script>
+let steps=[],cur=-1,playing=false,timer=null;
+let pushed=[],popped=[];
+
+function parse(s){return s.split(',').map(x=>parseInt(x.trim())).filter(x=>!isNaN(x));}
+
+function buildSteps(){
+  pushed=parse(document.getElementById('ipushed').value);
+  popped=parse(document.getElementById('ipopped').value);
+  steps=[];
+  let p1=0,p2=0,st=[];
+
+  function snap(log,action){
+    steps.push({p1,p2,st:[...st],log,action,done:false});
+  }
+
+  snap('start','init');
+
+  while(p2<popped.length){
+    if(st.length>0&&st[st.length-1]===popped[p2]){
+      snap(`st1.back()=${st[st.length-1]} == popped[${p2}]=${popped[p2]} → pop & p2++`,'check');
+      st.pop_back===undefined?st.pop():st.pop();
+      p2++;
+      snap(`popped! st1.pop(), p2 now ${p2}`,'pop');
+    } else if(p1<pushed.length){
+      snap(`top≠popped[${p2}] → push pushed[${p1}]=${pushed[p1]}`,'check');
+      st.push(pushed[p1]);
+      p1++;
+      snap(`pushed pushed[${p1-1}]=${pushed[p1-1]}, p1 now ${p1}`,'push');
+    } else {
+      snap(`nothing to push, can't match popped[${p2}]=${popped[p2]} → return false`,'fail');
+      steps[steps.length-1].done=true;
+      steps[steps.length-1].result=false;
+      cur=-1;buildStrips();render();
+      document.getElementById('verdict').style.display='none';
+      return;
+    }
+  }
+
+  const ok=p1===p2;
+  snap(`loop done. p1=${p1}, p2=${p2} → return ${ok}`,'done');
+  steps[steps.length-1].done=true;
+  steps[steps.length-1].result=ok;
+
+  cur=-1;buildStrips();render();
+  document.getElementById('verdict').style.display='none';
+}
+
+function buildStrips(){
+  function strip(elId,arr,prefix){
+    const el=document.getElementById(elId);
+    el.innerHTML=`<div class="arr-label">${prefix}</div>`;
+    arr.forEach((v,i)=>{
+      const d=document.createElement('div');
+      d.className='cell';d.id=`${elId}-${i}`;
+      d.innerHTML=`${v}<span class="ptr" id="${elId}-ptr-${i}" style="display:none">↑</span>`;
+      el.appendChild(d);
+    });
+  }
+  strip('stripPushed',pushed,'pushed');
+  strip('stripPopped',popped,'popped');
+}
+
+function renderStack(st){
+  const el=document.getElementById('stackBody');
+  if(!st.length){el.innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary);padding:4px 0">(empty)</div>';return;}
+  let html='';
+  for(let i=st.length-1;i>=0;i--){
+    const isTop=i===st.length-1;
+    html+=`<div class="s-item">${isTop?'<span class="top-badge">top</span>':''}<span>${st[i]}</span></div>`;
+  }
+  html+=`<div class="bot-line">bottom</div>`;
+  el.innerHTML=html;
+}
+
+function render(){
+  document.getElementById('stepInfo').textContent=`step ${Math.max(cur+1,0)} / ${steps.length}`;
+  if(cur<0){
+    document.getElementById('log').textContent='press Step or Play to start';
+    document.getElementById('vp1').textContent='0';
+    document.getElementById('vp2').textContent='0';
+    renderStack([]);
+    pushed.forEach((_,i)=>{const e=document.getElementById(`stripPushed-${i}`);if(e)e.className='cell';});
+    popped.forEach((_,i)=>{const e=document.getElementById(`stripPopped-${i}`);if(e)e.className='cell';});
+    return;
+  }
+  const st=steps[cur];
+  document.getElementById('log').textContent=st.log;
+  document.getElementById('vp1').textContent=st.p1;
+  document.getElementById('vp2').textContent=st.p2;
+  renderStack(st.st);
+
+  pushed.forEach((_,i)=>{
+    const e=document.getElementById(`stripPushed-${i}`);if(!e)return;
+    e.className=i<st.p1?'cell done':i===st.p1?'cell active-push':'cell';
+  });
+  popped.forEach((_,i)=>{
+    const e=document.getElementById(`stripPopped-${i}`);if(!e)return;
+    e.className=i<st.p2?'cell done':i===st.p2?'cell active-pop':'cell';
+  });
+
+  if(st.done){
+    const vd=document.getElementById('verdict');
+    vd.className='verdict '+(st.result?'true':'false');
+    vd.textContent=st.result?'return true ✓ — valid sequence':'return false ✗ — invalid sequence';
+    vd.style.display='block';
+  } else {
+    document.getElementById('verdict').style.display='none';
+  }
+}
+
+function go(d){cur=Math.max(-1,Math.min(steps.length-1,cur+d));render();}
+function reset(){stopPlay();cur=-1;render();}
+function togglePlay(){
+  if(playing){stopPlay();return;}
+  playing=true;
+  document.getElementById('btnPlay').innerHTML='<i class="ti ti-player-pause" aria-hidden="true"></i> pause';
+  timer=setInterval(()=>{if(cur>=steps.length-1){stopPlay();return;}go(1);},700);
+}
+function stopPlay(){
+  playing=false;clearInterval(timer);
+  document.getElementById('btnPlay').innerHTML='<i class="ti ti-player-play" aria-hidden="true"></i> play';
+}
+
+buildSteps();
+</script>
